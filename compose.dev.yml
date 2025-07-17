@@ -1,0 +1,67 @@
+name: documenso-development
+
+services:
+  database:
+    image: postgres:15
+    container_name: documenso-db
+    environment:
+      - POSTGRES_USER=documenso
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=documenso
+    ports:
+      - 54320:5432
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U documenso']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - documenso_database:/var/lib/postgresql/data
+
+  inbucket:
+    image: inbucket/inbucket
+    container_name: documenso-mailserver
+    ports:
+      - 9000:9000
+      - 2500:2500
+      - 1100:1100
+
+  documenso:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        - NEXT_PRIVATE_ENCRYPTION_KEY=CAFEBABE
+        - NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY=DEADBEEF
+    container_name: documenso-app
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      - PORT=3000
+      - NEXTAUTH_SECRET=your-secret-here
+      - NEXT_PRIVATE_ENCRYPTION_KEY=CAFEBABE
+      - NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY=DEADBEEF
+      - NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
+      - NEXT_PRIVATE_INTERNAL_WEBAPP_URL=http://localhost:3000
+      - NEXT_PRIVATE_DATABASE_URL=postgres://documenso:password@database:5432/documenso
+      - NEXT_PRIVATE_DIRECT_DATABASE_URL=postgres://documenso:password@database:5432/documenso
+      - NEXT_PUBLIC_UPLOAD_TRANSPORT=database
+      - NEXT_PRIVATE_SMTP_TRANSPORT=smtp-auth
+      - NEXT_PRIVATE_SMTP_HOST=inbucket
+      - NEXT_PRIVATE_SMTP_PORT=2500
+      - NEXT_PRIVATE_SMTP_USERNAME=documenso
+      - NEXT_PRIVATE_SMTP_PASSWORD=password
+      - NEXT_PRIVATE_SMTP_FROM_NAME="Documenso"
+      - NEXT_PRIVATE_SMTP_FROM_ADDRESS=noreply@documenso.com
+      - NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH=/opt/documenso/cert.p12
+      - NEXT_PUBLIC_DISABLE_SIGNUP=false
+      # 한국어 기본 설정
+      - NEXT_PUBLIC_DEFAULT_LANGUAGE=ko
+    ports:
+      - 3000:3000
+    volumes:
+      - ./assets/example.pdf:/opt/documenso/cert.p12
+
+volumes:
+  documenso_database:
