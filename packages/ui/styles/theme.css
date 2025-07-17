@@ -5,55 +5,56 @@
 @layer base {
   :root,
   .dark-mode-disabled {
-    --background: 0 0% 100%;
-    --foreground: 222.2 47.4% 11.2%;
+    /* eSignHub Dark Gold Theme - 밝은 배경 버전 */
+    --background: 0 0% 96%;
+    --foreground: 0 0% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 40%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 0 0% 15%;
 
     --card: 0 0% 100%;
-    --card-border: 214.3 31.8% 91.4%;
-    --card-border-tint: 112 205 159;
-    --card-foreground: 222.2 47.4% 11.2%;
+    --card-border: 47 30% 75%;
+    --card-border-tint: 47 100 180;
+    --card-foreground: 0 0% 15%;
 
-    --field-card: 95 74% 90%;
-    --field-card-border: 95.08 71.08% 67.45%;
-    --field-card-foreground: 222.2 47.4% 11.2%;
+    --field-card: 47 20% 95%;
+    --field-card-border: 47 80% 60%;
+    --field-card-foreground: 0 0% 15%;
 
-    --widget: 0 0% 97%;
-    --widget-foreground: 0 0% 95%;
+    --widget: 0 0% 98%;
+    --widget-foreground: 0 0% 20%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 47 30% 80%;
+    --input: 47 30% 80%;
 
-    --primary: 95.08 71.08% 67.45%;
-    --primary-foreground: 95.08 71.08% 10%;
+    --primary: 47 100% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 47 100% 25%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 47 80% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --ring: 95.08 71.08% 67.45%;
+    --ring: 47 100% 50%;
 
     --radius: 0.5rem;
 
-    --warning: 54 96% 45%;
+    --warning: 45 100% 50%;
 
-    --gold: 47.9 95.8% 53.1%;
+    --gold: 47 100% 50%;
 
     --recipient-green: 100 48% 55%;
     --recipient-blue: 212 56% 50%;
     --recipient-purple: 266 100% 64%;
     --recipient-orange: 36 92% 54%;
-    --recipient-yellow: 51 100% 43%;
+    --recipient-yellow: 51 100% 50%;
     --recipient-pink: 313 65% 57%;
 
     /* Base - Neutral */
@@ -82,18 +83,18 @@
     --new-white-800: 0, 0%, 90%;
     --new-white-900: 0, 0%, 100%;
 
-    /* Primary - Green */
-    --new-primary-50: 98, 73%, 97%;
-    --new-primary-100: 95, 73%, 94%;
-    --new-primary-200: 94, 70%, 87%;
-    --new-primary-300: 95, 71%, 81%;
-    --new-primary-400: 95, 71%, 74%;
-    --new-primary-500: 95, 71%, 67%;
-    --new-primary-600: 95, 71%, 54%;
-    --new-primary-700: 95, 71%, 41%;
-    --new-primary-800: 95, 71%, 27%;
-    --new-primary-900: 95, 72%, 14%;
-    --new-primary-950: 95, 72%, 7%;
+    /* Primary - Gold */
+    --new-primary-50: 47, 100%, 97%;
+    --new-primary-100: 47, 100%, 94%;
+    --new-primary-200: 47, 100%, 87%;
+    --new-primary-300: 47, 100%, 81%;
+    --new-primary-400: 47, 100%, 74%;
+    --new-primary-500: 47, 100%, 67%;
+    --new-primary-600: 47, 100%, 54%;
+    --new-primary-700: 47, 100%, 41%;
+    --new-primary-800: 47, 100%, 27%;
+    --new-primary-900: 47, 100%, 14%;
+    --new-primary-950: 47, 100%, 7%;
 
     /* Secondary - Info */
     --new-info-50: 210, 54%, 95%;
@@ -140,47 +141,48 @@
   }
 
   .dark:not(.dark-mode-disabled) {
-    --background: 0 0% 14.9%;
-    --foreground: 0 0% 97%;
+    /* Dark mode - 중간 톤의 어두운 테마 */
+    --background: 0 0% 15%;
+    --foreground: 47 100% 85%;
 
-    --muted: 0 0% 23.4%;
-    --muted-foreground: 0 0% 85%;
+    --muted: 0 0% 22%;
+    --muted-foreground: 47 30% 70%;
 
-    --popover: 0 0% 14.9%;
-    --popover-foreground: 0 0% 90%;
+    --popover: 0 0% 18%;
+    --popover-foreground: 47 100% 85%;
 
-    --card: 0 0% 14.9%;
-    --card-border: 0 0% 27.9%;
-    --card-border-tint: 112 205 159;
-    --card-foreground: 0 0% 95%;
+    --card: 0 0% 18%;
+    --card-border: 47 40% 35%;
+    --card-border-tint: 47 100 180;
+    --card-foreground: 47 100% 85%;
 
-    --widget: 0 0% 14.9%;
-    --widget-foreground: 0 0% 18%;
+    --widget: 0 0% 20%;
+    --widget-foreground: 0 0% 25%;
 
-    --border: 0 0% 27.9%;
-    --input: 0 0% 27.9%;
+    --border: 47 30% 40%;
+    --input: 47 30% 40%;
 
-    --field-border: 214.3 31.8% 91.4%;
+    --field-border: 47 50% 50%;
 
-    --primary: 95.08 71.08% 67.45%;
-    --primary-foreground: 95.08 71.08% 10%;
+    --primary: 47 100% 70%;
+    --primary-foreground: 0 0% 8%;
 
-    --secondary: 0 0% 23.4%;
-    --secondary-foreground: 95.08 71.08% 67.45%;
+    --secondary: 0 0% 25%;
+    --secondary-foreground: 47 100% 75%;
 
-    --accent: 0 0% 27.9%;
-    --accent-foreground: 95.08 71.08% 67.45%;
+    --accent: 47 80% 60%;
+    --accent-foreground: 0 0% 8%;
 
-    --destructive: 0 87% 62%;
-    --destructive-foreground: 0 87% 19%;
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 47 100% 95%;
 
-    --ring: 95.08 71.08% 67.45%;
+    --ring: 47 100% 70%;
 
     --radius: 0.5rem;
 
-    --warning: 54 96% 45%;
+    --warning: 45 100% 60%;
 
-    --gold: 47.9 95.8% 53.1%;
+    --gold: 47 100% 70%;
   }
 }
 
