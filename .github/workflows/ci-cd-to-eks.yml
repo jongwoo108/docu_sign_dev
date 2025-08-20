@@ -1,0 +1,24 @@
+name: "CI/CD to EKS"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "README.md"
+      - ".github/**"
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: 이하 ECR 로그인/빌드/쿠버네티스 배포 스텝 그대로 복사
