@@ -25,12 +25,12 @@ jobs:
       ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
       EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
-      # 실제 배포 컨테이너 기본값(배포에 맞춤)
       CONTAINER_NAME: web
-      KUBECONFIG_PATH: ${{ runner.temp }}/kubeconfig
 
     steps:
       - uses: actions/checkout@v4
+      - name: Set kubeconfig path
+        run: echo "KUBECONFIG_PATH=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -55,7 +55,14 @@ jobs:
           IMAGE_TAG="${GITHUB_SHA::7}"
           docker build -t "${REPO}:${IMAGE_TAG}" .
           docker push "${REPO}:${IMAGE_TAG}"
-          echo "IMAGE=${REPO}:${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "IMAGE=${REPO}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Install kubectl (if missing)
+        run: |
+          if ! command -v kubectl >/dev/null; then
+            curl -sSL -o kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+            chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+          fi
 
       - name: Update kubeconfig
         id: kubeconfig
@@ -66,13 +73,12 @@ jobs:
             --region "${AWS_REGION}" \
             --kubeconfig "${KUBECONFIG_PATH}"
           kubectl --kubeconfig "${KUBECONFIG_PATH}" version --short
-          echo "KUBECONFIG_READY=true" >> $GITHUB_ENV
+          echo "KUBECONFIG_READY=true" >> "$GITHUB_ENV"
 
       - name: RBAC sanity check
         if: env.KUBECONFIG_READY == 'true'
         run: kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment
 
-      # 컨테이너 이름 자동 감지(Secrets에 CONTAINER_NAME가 있으면 그 값을 우선)
       - name: Resolve container name (auto-detect)
         run: |
           CN="${CONTAINER_NAME}"
@@ -82,7 +88,7 @@ jobs:
             CN="$(kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
                   get deploy/documenso -o jsonpath='{.spec.template.spec.containers[0].name}')"
           fi
-          echo "USING_CONTAINER=${CN}" >> $GITHUB_ENV
+          echo "USING_CONTAINER=${CN}" >> "$GITHUB_ENV"
           echo "Using container: ${CN}"
 
       - name: Rolling update
