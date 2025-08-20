@@ -1,4 +1,4 @@
-name: CI/CD to EKS
+name: "CI/CD to EKS"
 
 on:
   push:
