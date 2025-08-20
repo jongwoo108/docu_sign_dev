@@ -57,9 +57,11 @@ jobs:
       - name: Rolling update
         run: |
           set -euxo pipefail
-          kubectl -n ${{ secrets.K8S_NAMESPACE }} set image deploy/documenso documenso="$IMAGE"
+          kubectl -n ${{ secrets.K8S_NAMESPACE }} set image deploy/documenso web="$IMAGE"
           kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout status deploy/documenso --timeout=180s
 
       - name: On failure → Rollback
         if: failure()
         run: kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout undo deploy/documenso
+
+        
