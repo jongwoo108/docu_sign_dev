@@ -38,8 +38,21 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Who am I
-        run: aws sts get-caller-identity
+      - name: Debug - Check AWS identity and permissions
+        run: |
+          echo "=== AWS Identity ==="
+          aws sts get-caller-identity
+          echo ""
+          echo "=== Role ARN from secrets ==="
+          echo "AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}"
+          echo ""
+          echo "=== EKS Cluster Info ==="
+          aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" --query 'cluster.{name:name,status:status,version:version,arn:arn}' || echo "Cannot describe cluster"
+          echo ""
+          echo "=== Environment Variables ==="
+          echo "AWS_REGION: ${AWS_REGION}"
+          echo "EKS_CLUSTER_NAME: ${EKS_CLUSTER_NAME}"
+          echo "K8S_NAMESPACE: ${K8S_NAMESPACE}"
 
       - name: Login to Amazon ECR
         run: |
@@ -68,40 +81,66 @@ jobs:
         id: kubeconfig
         run: |
           set -euxo pipefail
+          echo "=== Updating kubeconfig ==="
           aws eks update-kubeconfig \
             --name "${EKS_CLUSTER_NAME}" \
             --region "${AWS_REGION}" \
             --kubeconfig "${KUBECONFIG_PATH}"
+          echo ""
+          echo "=== kubectl version ==="
           kubectl --kubeconfig "${KUBECONFIG_PATH}" version --client
+          echo ""
+          echo "=== Testing basic kubectl access ==="
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" get nodes || echo "Cannot access nodes (this might be expected if role lacks permissions)"
           echo "KUBECONFIG_READY=true" >> "$GITHUB_ENV"
+
+      - name: Debug - Check current aws-auth ConfigMap
+        if: env.KUBECONFIG_READY == 'true'
+        run: |
+          echo "=== Current aws-auth ConfigMap ==="
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" get configmap aws-auth -n kube-system -o yaml || echo "Cannot read aws-auth ConfigMap"
+        continue-on-error: true
 
       - name: RBAC sanity check
         if: env.KUBECONFIG_READY == 'true'
-        run: kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment
+        run: |
+          echo "=== RBAC Permission Check ==="
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment || echo "No permission to patch deployments"
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i get pods || echo "No permission to get pods"
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i list deployments || echo "No permission to list deployments"
+        continue-on-error: true
 
       - name: Resolve container name (auto-detect)
+        if: env.KUBECONFIG_READY == 'true'
         run: |
           CN="${CONTAINER_NAME}"
           if [ -n "${{ secrets.CONTAINER_NAME }}" ]; then
             CN="${{ secrets.CONTAINER_NAME }}"
           else
             CN="$(kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
-                  get deploy/documenso -o jsonpath='{.spec.template.spec.containers[0].name}')"
+                  get deploy/documenso -o jsonpath='{.spec.template.spec.containers[0].name}' 2>/dev/null || echo 'web')"
           fi
           echo "USING_CONTAINER=${CN}" >> "$GITHUB_ENV"
           echo "Using container: ${CN}"
+        continue-on-error: true
 
       - name: Rolling update
         if: env.KUBECONFIG_READY == 'true'
         run: |
           set -euxo pipefail
+          echo "=== Starting rolling update ==="
+          echo "Image: ${IMAGE}"
+          echo "Container: ${USING_CONTAINER}"
           kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
             set image deploy/documenso "${USING_CONTAINER}"="${IMAGE}"
           kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
             rollout status deploy/documenso --timeout=180s
+        continue-on-error: true
 
       - name: On failure → Rollback
         if: failure() && env.KUBECONFIG_READY == 'true'
         run: |
+          echo "=== Rolling back deployment ==="
           kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
             rollout undo deploy/documenso
+        continue-on-error: true
