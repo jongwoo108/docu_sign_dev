@@ -2,11 +2,11 @@ name: CI/CD to EKS
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths-ignore:
       - "README.md"
       - ".github/**"
-  workflow_dispatch: {}  
+  workflow_dispatch: {}
 
 concurrency:
   group: production-deploy
@@ -20,6 +20,15 @@ jobs:
       id-token: write
       contents: read
 
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
+      CONTAINER_NAME: documenso
+      KUBECONFIG_PATH: ${{ runner.temp }}/kubeconfig
+
     steps:
       - uses: actions/checkout@v4
 
@@ -27,41 +36,65 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Who am I
         run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+          aws ecr get-login-password --region "${AWS_REGION}" \
           | docker login --username AWS --password-stdin \
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
       - name: Build & Push Docker image
-        env:
-          REPO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}
+        id: push-image
         run: |
           set -euxo pipefail
-          IMAGE_TAG=${GITHUB_SHA::7}
-          docker build -t "$REPO:$IMAGE_TAG" .
-          docker push "$REPO:$IMAGE_TAG"
-          echo "IMAGE=$REPO:$IMAGE_TAG" >> $GITHUB_ENV
+          REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+          IMAGE_TAG="${GITHUB_SHA::7}"
+          docker build -t "${REPO}:${IMAGE_TAG}" .
+          docker push "${REPO}:${IMAGE_TAG}"
+          echo "IMAGE=${REPO}:${IMAGE_TAG}" >> $GITHUB_ENV
 
+      # === kubeconfig 생성 & 검증 ===
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+        id: kubeconfig
+        run: |
+          set -euxo pipefail
+          # 임시 kubeconfig 파일을 생성해서 사용
+          aws eks update-kubeconfig \
+            --name "${EKS_CLUSTER_NAME}" \
+            --region "${AWS_REGION}" \
+            --kubeconfig "${KUBECONFIG_PATH}"
+          # 간단 검증
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" version --short
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" get ns
+          echo "KUBECONFIG_READY=true" >> $GITHUB_ENV
 
       - name: RBAC sanity check
-        run: kubectl -n ${{ secrets.K8S_NAMESPACE }} auth can-i patch deployment
+        if: env.KUBECONFIG_READY == 'true'
+        run: kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment
+
+      # container 이름 선택 (documenso/web 중 택1, 시크릿 CONTAINER_NAME가 있으면 우선)
+      - name: Resolve container name
+        run: |
+          CN="${CONTAINER_NAME}"
+          if [ -n "${{ secrets.CONTAINER_NAME }}" ]; then CN="${{ secrets.CONTAINER_NAME }}"; fi
+          echo "USING_CONTAINER=${CN}" >> $GITHUB_ENV
+          echo "Using container: ${CN}"
 
       - name: Rolling update
+        if: env.KUBECONFIG_READY == 'true'
         run: |
           set -euxo pipefail
-          kubectl -n ${{ secrets.K8S_NAMESPACE }} set image deploy/documenso web="$IMAGE"
-          kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout status deploy/documenso --timeout=180s
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+            set image deploy/documenso "${USING_CONTAINER}"="${IMAGE}"
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+            rollout status deploy/documenso --timeout=180s
 
       - name: On failure → Rollback
-        if: failure()
-        run: kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout undo deploy/documenso
-
-        
+        if: failure() && env.KUBECONFIG_READY == 'true'
+        run: |
+          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+            rollout undo deploy/documenso
