@@ -5,7 +5,6 @@ on:
     branches: ["main"]
     paths-ignore:
       - "README.md"
-      - ".github/**"
   workflow_dispatch: {}
 
 concurrency:
@@ -26,7 +25,8 @@ jobs:
       ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
       EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
-      CONTAINER_NAME: documenso
+      # 실제 배포 컨테이너 기본값(배포에 맞춤)
+      CONTAINER_NAME: web
       KUBECONFIG_PATH: ${{ runner.temp }}/kubeconfig
 
     steps:
@@ -57,30 +57,31 @@ jobs:
           docker push "${REPO}:${IMAGE_TAG}"
           echo "IMAGE=${REPO}:${IMAGE_TAG}" >> $GITHUB_ENV
 
-      # === kubeconfig 생성 & 검증 ===
       - name: Update kubeconfig
         id: kubeconfig
         run: |
           set -euxo pipefail
-          # 임시 kubeconfig 파일을 생성해서 사용
           aws eks update-kubeconfig \
             --name "${EKS_CLUSTER_NAME}" \
             --region "${AWS_REGION}" \
             --kubeconfig "${KUBECONFIG_PATH}"
-          # 간단 검증
           kubectl --kubeconfig "${KUBECONFIG_PATH}" version --short
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" get ns
           echo "KUBECONFIG_READY=true" >> $GITHUB_ENV
 
       - name: RBAC sanity check
         if: env.KUBECONFIG_READY == 'true'
         run: kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment
 
-      # container 이름 선택 (documenso/web 중 택1, 시크릿 CONTAINER_NAME가 있으면 우선)
-      - name: Resolve container name
+      # 컨테이너 이름 자동 감지(Secrets에 CONTAINER_NAME가 있으면 그 값을 우선)
+      - name: Resolve container name (auto-detect)
         run: |
           CN="${CONTAINER_NAME}"
-          if [ -n "${{ secrets.CONTAINER_NAME }}" ]; then CN="${{ secrets.CONTAINER_NAME }}"; fi
+          if [ -n "${{ secrets.CONTAINER_NAME }}" ]; then
+            CN="${{ secrets.CONTAINER_NAME }}"
+          else
+            CN="$(kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+                  get deploy/documenso -o jsonpath='{.spec.template.spec.containers[0].name}')"
+          fi
           echo "USING_CONTAINER=${CN}" >> $GITHUB_ENV
           echo "Using container: ${CN}"
 
