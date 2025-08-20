@@ -1,24 +1,65 @@
-name: Deploy to Production
+name: CI/CD to EKS
 
 on:
   push:
-    tags:
-      - '*'
+    branches: [ "main" ]
+    paths-ignore:
+      - "README.md"
+      - ".github/**"
+  workflow_dispatch: {}  
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN }}
+      - uses: actions/checkout@v4
 
-      - name: Push to release branch
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Who am I
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
         run: |
-          git checkout release || git checkout -b release
-          git merge --ff-only main
-          git push origin release
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+          | docker login --username AWS --password-stdin \
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+      - name: Build & Push Docker image
+        env:
+          REPO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}
+        run: |
+          set -euxo pipefail
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build -t "$REPO:$IMAGE_TAG" .
+          docker push "$REPO:$IMAGE_TAG"
+          echo "IMAGE=$REPO:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+      - name: RBAC sanity check
+        run: kubectl -n ${{ secrets.K8S_NAMESPACE }} auth can-i patch deployment
+
+      - name: Rolling update
+        run: |
+          set -euxo pipefail
+          kubectl -n ${{ secrets.K8S_NAMESPACE }} set image deploy/documenso documenso="$IMAGE"
+          kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout status deploy/documenso --timeout=180s
+
+      - name: On failure → Rollback
+        if: failure()
+        run: kubectl -n ${{ secrets.K8S_NAMESPACE }} rollout undo deploy/documenso
