@@ -1,5 +1,5 @@
-msgid ""
-msgstr ""
+msgid "Enable notifications"
+msgstr "Enable notifications"
 "POT-Creation-Date: 2024-07-24 13:01+1000\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
