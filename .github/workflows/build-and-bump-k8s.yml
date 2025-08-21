@@ -1,0 +1,89 @@
+name: Build -> Push ECR -> PR to k8s repo
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: documenso
+  K8S_REPO_OWNER: jongwoo108
+  K8S_REPO_NAME: docu_sign_dev
+  K8S_REPO_BRANCH: main
+  K8S_DEPLOYMENT_FILE: k8s/documenso/deployment.yaml
+  K8S_CONTAINER_NAME: web
+
+jobs:
+  build-and-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Define image info
+        id: vars
+        run: |
+          echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push
+        env:
+          IMAGE_URI: ${{ steps.vars.outputs.IMAGE_URI }}
+        run: |
+          docker build --platform linux/amd64 -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+
+      - name: Clone k8s repo (with PAT)
+        run: |
+          git clone https://x-access-token:${{ secrets.K8S_REPO_PAT }}@github.com/${{ env.K8S_REPO_OWNER }}/${{ env.K8S_REPO_NAME }}.git
+          cd ${{ env.K8S_REPO_NAME }}
+          git checkout -b bump-image-${GITHUB_SHA}
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image in deployment.yaml
+        working-directory: ${{ env.K8S_REPO_NAME }}
+        env:
+          FILE: ${{ env.K8S_DEPLOYMENT_FILE }}
+          CONTAINER: ${{ env.K8S_CONTAINER_NAME }}
+          IMAGE_URI: ${{ steps.vars.outputs.IMAGE_URI }}
+        run: |
+          yq -i '(.spec.template.spec.containers[] | select(.name == env(CONTAINER)) .image) = env(IMAGE_URI)' "$FILE"
+          git --no-pager diff "$FILE" || true
+
+      - name: Commit & Push branch
+        working-directory: ${{ env.K8S_REPO_NAME }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ${{ env.K8S_DEPLOYMENT_FILE }}
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
+          git push --set-upstream origin bump-image-${GITHUB_SHA}
+
+      - name: Open PR to k8s repo
+        env:
+          GH_TOKEN: ${{ secrets.K8S_REPO_PAT }}
+        working-directory: ${{ env.K8S_REPO_NAME }}
+        run: |
+          TITLE="chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
+          BODY="Automated PR from app build."
+          DATA=$(jq -nc --arg title "$TITLE" --arg head "bump-image-${GITHUB_SHA}" --arg base "${{ env.K8S_REPO_BRANCH }}" --arg body "$BODY" '{title:$title, head:$head, base:$base, body:$body}')
+          curl -s -H "Authorization: token $GH_TOKEN" \
+               -H "Accept: application/vnd.github+json" \
+               https://api.github.com/repos/${{ env.K8S_REPO_OWNER }}/${{ env.K8S_REPO_NAME }}/pulls \
+               -d "$DATA"
