@@ -1,0 +1,44 @@
+name: Build & Push to ECR
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: documenso
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Define image info
+        id: vars
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push (linux/amd64)
+        env:
+          IMAGE_URI: ${{ steps.vars.outputs.IMAGE_URI }}
+        run: |
+          docker build --platform linux/amd64 -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+
+      - name: Summary
+        run: echo "Pushed ${{ steps.vars.outputs.IMAGE_URI }}"
