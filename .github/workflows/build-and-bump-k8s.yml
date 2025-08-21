@@ -121,7 +121,7 @@ jobs:
           REPO: ${{ github.repository }}
           BASE: main
           HEAD: ${{ steps.br.outputs.NAME }}
-          TITLE: chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}
+          TITLE: "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
           BODY: Automated PR from app build.
         run: |
           set -e
