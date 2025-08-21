@@ -18,9 +18,14 @@ export type I18nLocaleData = {
   locales: string[];
 };
 
+const getDefaultLanguage = (): SupportedLanguageCodes => {
+  const envLang = process.env.NEXT_PUBLIC_DEFAULT_LANGUAGE as SupportedLanguageCodes;
+  return SUPPORTED_LANGUAGE_CODES.includes(envLang) ? envLang : 'en';
+};
+
 export const APP_I18N_OPTIONS = {
   supportedLangs: SUPPORTED_LANGUAGE_CODES,
-  sourceLang: 'en',
+  sourceLang: getDefaultLanguage(),   // ← env 기반
   defaultLocale: 'en-US',
 } as const;
 
