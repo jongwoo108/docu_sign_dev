@@ -5,58 +5,89 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# 동일 ref에서 여러 런이 겹쳐도 충돌 최소화
+concurrency:
+  group: bump-image-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: write          # git push/commit
+  pull-requests: write     # gh pr create
+  # id-token: write        # (OIDC 사용 시 주석 해제)
 
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: documenso
+
+  # k8s 파일/컨테이너 설정
   K8S_DEPLOYMENT_FILE: k8s/documenso/deployment.yaml
   K8S_CONTAINER_NAME: web
+
+  # 브랜치 접두사
   PR_BRANCH_PREFIX: bump-image-
 
 jobs:
   build-and-pr:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true   # ← 같은 레포에 push할 거라 true
+          persist-credentials: true   # 같은 레포에 push하므로 true
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      # --- AWS 로그인(ECR 푸시용) ---
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+          # OIDC 사용할 경우 위 두 줄 대신 아래 사용
+          # role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          # role-session-name: gh-actions
+          # aws-region: ${{ env.AWS_REGION }}
 
-      - id: ecr
+      - name: Login to Amazon ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Define image info
         id: vars
-        run: echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+        run: |
+          echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
-      - name: Build & Push
+      # --- Docker Build & Push ---
+      - name: Build & Push image
         env:
           IMAGE_URI: ${{ steps.vars.outputs.IMAGE_URI }}
         run: |
           docker build --platform linux/amd64 -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
+      # --- 도구 설치 (yq) ---
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+          yq --version
 
-      - name: Create bump branch
-        env:
-          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
+      # --- 브랜치명 계산 (SHA + run_id + run_attempt 로 유니크) ---
+      - name: Compute branch name
+        id: br
         run: |
-          git checkout -b "$BRANCH"
+          echo "NAME=${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
 
+      # --- 새 브랜치 생성/초기화 ---
+      - name: Create/Reset bump branch from base
+        env:
+          BASE: main
+        run: |
+          git fetch origin "$BASE" --depth=1
+          git checkout -B "${{ steps.br.outputs.NAME }}" "origin/$BASE"
+
+      # --- k8s Deployment의 image 태그 변경 ---
       - name: Update image in deployment.yaml
         env:
           FILE: ${{ env.K8S_DEPLOYMENT_FILE }}
@@ -64,11 +95,11 @@ jobs:
           IMAGE_URI: ${{ steps.vars.outputs.IMAGE_URI }}
         run: |
           yq -i '(.spec.template.spec.containers[] | select(.name == env(CONTAINER)) .image) = env(IMAGE_URI)' "$FILE"
+          echo "=== Diff ==="
           git --no-pager diff "$FILE" || true
 
+      # --- 커밋 & 푸시 ---
       - name: Commit changes
-        env:
-          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -78,15 +109,18 @@ jobs:
             exit 0
           fi
           git commit -m "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
-          git push --set-upstream origin "$BRANCH"
 
+      - name: Push branch (safe force)
+        run: |
+          git push --force-with-lease --set-upstream origin "${{ steps.br.outputs.NAME }}"
+
+      # --- PR 생성 ---
       - name: Open PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
         run: |
           gh pr create \
             --title "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}" \
             --body "Automated PR from app build." \
             --base "main" \
-            --head "$BRANCH" || echo "PR already exists or no changes."
+            --head "${{ steps.br.outputs.NAME }}" || echo "PR already exists or no changes."
