@@ -116,35 +116,47 @@ jobs:
 
       # --- PR 생성 ---
       - name: Open PR (API)
+        if: steps.commit.outputs.changed == 'true'  # ← 있다면 유지
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BASE: main
           HEAD: ${{ steps.br.outputs.NAME }}
           TITLE: "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
-          BODY: Automated PR from app build.
+          BODY: "Automated PR from app build."
         run: |
           set -e
-          # PR 생성
-          RES=$(curl -sS -X POST \
+
+          # 1) PR 생성 시도
+          RES_CREATE=$(curl -sS -X POST \
             -H "Authorization: token ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${REPO}/pulls \
+            "https://api.github.com/repos/${REPO}/pulls" \
             -d "$(jq -nc --arg title "$TITLE" --arg head "$HEAD" --arg base "$BASE" --arg body "$BODY" \
-              '{title:$title, head:$head, base:$base, body:$body}')" )
-          
-          # 생성 실패 시 이미 존재하는지 조회
-          if [ "$(echo "$RES" | jq -r '.html_url // empty')" = "" ]; then
-            echo "Create PR failed; checking if it already exists..."
-            RES=$(curl -sS -H "Authorization: token ${GH_TOKEN}" \
+                  '{title:$title, head:$head, base:$base, body:$body}')" )
+
+          # 2) 성공 여부 판단: html_url 존재하면 성공
+          PR_URL=$(echo "$RES_CREATE" | jq -r 'if type=="object" and has("html_url") then .html_url else empty end')
+
+          if [ -z "$PR_URL" ]; then
+            echo "Create PR failed or already exists. Checking open PRs for this branch..."
+            # 3) 이미 열린 PR 있는지 조회 (배열 반환)
+            RES_LIST=$(curl -sS \
+              -H "Authorization: token ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${REPO}/pulls?head=$(echo ${REPO} | cut -d'/' -f1):${HEAD}&base=${BASE}&state=open" )
+              "https://api.github.com/repos/${REPO}/pulls?head=$(echo ${REPO} | cut -d'/' -f1):${HEAD}&base=${BASE}&state=open")
+
+            PR_URL=$(echo "$RES_LIST" | jq -r 'if type=="array" and length>0 and .[0]|has("html_url") then .[0].html_url else empty end')
           fi
 
-          PR_URL=$(echo "$RES" | jq -r '.[0].html_url // .html_url // empty')
           if [ -z "$PR_URL" ]; then
-            echo "::error::PR creation failed. Response:"
-            echo "$RES"
+            echo "::group::Debug response"
+            echo "Create response:"
+            echo "$RES_CREATE" | jq .
+            echo "List response:"
+            echo "${RES_LIST:-null}" | jq .
+            echo "::endgroup::"
+            echo "::error::PR creation failed and no existing open PR found."
             exit 1
           fi
 
