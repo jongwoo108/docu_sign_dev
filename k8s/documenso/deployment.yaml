@@ -3,11 +3,19 @@ kind: Deployment
 metadata:
   name: documenso
   namespace: documenso
+  labels:
+    app: documenso
 spec:
   replicas: 2
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: documenso
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
   template:
     metadata:
       labels:
@@ -15,11 +23,118 @@ spec:
     spec:
       containers:
         - name: web
-          image: <ECR_REPO_URL>:<TAG>   # ECR 이미지로 교체
+          # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:latest
+          imagePullPolicy: IfNotPresent
+          # (이미지 엔트리포인트가 정상이면 아래 command/args는 생략 가능)
+          # command: ["/bin/sh","-lc"]
+          # args: ["npm run start --workspace=@documenso/remix"]
           ports:
-            - containerPort: 3000
+            - name: http
+              containerPort: 3000
+          # 라이브에서 보였던 헬스체크와 유사하게 설정
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          # ALB DNS 반영 (현재 라이브에서 쓰던 값)
+          env:
+            - name: NEXTAUTH_URL
+              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+            - name: NEXT_PUBLIC_WEBAPP_URL
+              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+            - name: NEXT_PRIVATE_INTERNAL_WEBAPP_URL
+              value: "http://localhost:3000"
+            - name: APP_URL
+              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+            # DB (기존 시크릿 documenso-db 그대로 사용)
+            - name: NEXT_PRIVATE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-db
+                  key: NEXT_PRIVATE_DATABASE_URL
+            - name: NEXT_PRIVATE_DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-db
+                  key: NEXT_PRIVATE_DIRECT_DATABASE_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-db
+                  key: DATABASE_URL
+            # SMTP/EMAIL (기존 시크릿 documenso-smtp 그대로 사용)
+            - name: EMAIL_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: EMAIL_FROM
+            - name: EMAIL_SERVER_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: EMAIL_SERVER_HOST
+            - name: EMAIL_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: EMAIL_SERVER_PASSWORD
+            - name: EMAIL_SERVER_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: EMAIL_SERVER_PORT
+            - name: EMAIL_SERVER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: EMAIL_SERVER_USER
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: SMTP_FROM
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: SMTP_HOST
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: SMTP_PORT
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: SMTP_PASS
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-smtp
+                  key: SMTP_USER
+          # 기존에 envFrom으로 통짜 주입하던 시크릿 유지 (라이브와 동일: documenso-env)
           envFrom:
-            - configMapRef:
-                name: documenso-config
             - secretRef:
-                name: documenso-secrets
+                name: documenso-env
+      restartPolicy: Always
