@@ -115,14 +115,38 @@ jobs:
           git push --force-with-lease --set-upstream origin "${{ steps.br.outputs.NAME }}"
 
       # --- PR 생성 ---
-      - name: Open PR
+      - name: Open PR (API)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE: main
+          HEAD: ${{ steps.br.outputs.NAME }}
+          TITLE: chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}
+          BODY: Automated PR from app build.
         run: |
-          gh pr create \
-            --repo "${{ github.repository }}" \
-            --title "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}" \
-            --body "Automated PR from app build." \
-            --base "main" \
-            --head "${{ steps.br.outputs.NAME }}" \
-          || echo "PR already exists or creation failed."
+          set -e
+          # PR 생성
+          RES=$(curl -sS -X POST \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${REPO}/pulls \
+            -d "$(jq -nc --arg title "$TITLE" --arg head "$HEAD" --arg base "$BASE" --arg body "$BODY" \
+              '{title:$title, head:$head, base:$base, body:$body}')" )
+          
+          # 생성 실패 시 이미 존재하는지 조회
+          if [ "$(echo "$RES" | jq -r '.html_url // empty')" = "" ]; then
+            echo "Create PR failed; checking if it already exists..."
+            RES=$(curl -sS -H "Authorization: token ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/pulls?head=$(echo ${REPO} | cut -d'/' -f1):${HEAD}&base=${BASE}&state=open" )
+          fi
+
+          PR_URL=$(echo "$RES" | jq -r '.[0].html_url // .html_url // empty')
+          if [ -z "$PR_URL" ]; then
+            echo "::error::PR creation failed. Response:"
+            echo "$RES"
+            exit 1
+          fi
+
+          echo "PR_URL=$PR_URL"
+          echo "✅ Opened PR: $PR_URL"
