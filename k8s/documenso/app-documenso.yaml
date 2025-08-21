@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/<YOUR-ORG-OR-USER>/<REPO>.git   # ★ 바꿔주세요
+    repoURL: https://github.com/jongwoo108/docu_sign_dev.git
     targetRevision: main
     path: k8s/documenso
   destination:
