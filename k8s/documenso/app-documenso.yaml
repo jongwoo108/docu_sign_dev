@@ -1,0 +1,21 @@
+# k8s/documenso/app-documenso.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: documenso
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<YOUR-ORG-OR-USER>/<REPO>.git   # ★ 바꿔주세요
+    targetRevision: main
+    path: k8s/documenso
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: documenso
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
