@@ -1,23 +1,20 @@
 FROM node:22-alpine
-
 RUN apk add --no-cache bash libc6-compat openssl
-
+ENV NODE_ENV=production
 WORKDIR /app
 
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
+RUN npm ci || npm install
 
-RUN npm install
-
-COPY prisma ./prisma
+# 여기가 핵심 (packages/prisma)
+COPY packages/prisma ./prisma
 COPY . .
 
-RUN npm run build
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
-RUN npx prisma generate \
- && npm run prisma:migrate-deploy
+# Prisma client 생성
+RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
-# Documenso Remix 앱 경로 기준으로 실행 (기존 환경과 동일)
+RUN npm run build
+
 WORKDIR /app/apps/remix
 EXPOSE 3000
 CMD ["npm","run","start"]
