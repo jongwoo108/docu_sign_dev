@@ -20,7 +20,7 @@ COPY . .
 RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
 # 빌드(여기서 turbo 사용됨 → devDeps 필요)
-RUN npm run build
+RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
 
 # 런타임 슬림화: devDeps 제거 후 prod 모드
 RUN npm prune --omit=dev
