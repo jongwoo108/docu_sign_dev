@@ -5,20 +5,26 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: documenso
-  K8S_REPO_OWNER: jongwoo108
-  K8S_REPO_NAME: docu_sign_dev
-  K8S_REPO_BRANCH: main
   K8S_DEPLOYMENT_FILE: k8s/documenso/deployment.yaml
   K8S_CONTAINER_NAME: web
+  PR_BRANCH_PREFIX: bump-image-
 
 jobs:
   build-and-pr:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true   # ← 같은 레포에 push할 거라 true
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,8 +37,7 @@ jobs:
 
       - name: Define image info
         id: vars
-        run: |
-          echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+        run: echo "IMAGE_URI=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
       - name: Build & Push
         env:
@@ -41,19 +46,18 @@ jobs:
           docker build --platform linux/amd64 -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
-      - name: Clone k8s repo (with PAT)
-        run: |
-          git clone https://x-access-token:${{ secrets.K8S_REPO_PAT }}@github.com/${{ env.K8S_REPO_OWNER }}/${{ env.K8S_REPO_NAME }}.git
-          cd ${{ env.K8S_REPO_NAME }}
-          git checkout -b bump-image-${GITHUB_SHA}
-
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+      - name: Create bump branch
+        env:
+          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
+        run: |
+          git checkout -b "$BRANCH"
+
       - name: Update image in deployment.yaml
-        working-directory: ${{ env.K8S_REPO_NAME }}
         env:
           FILE: ${{ env.K8S_DEPLOYMENT_FILE }}
           CONTAINER: ${{ env.K8S_CONTAINER_NAME }}
@@ -62,28 +66,27 @@ jobs:
           yq -i '(.spec.template.spec.containers[] | select(.name == env(CONTAINER)) .image) = env(IMAGE_URI)' "$FILE"
           git --no-pager diff "$FILE" || true
 
-      - name: Commit & Push branch
-        working-directory: ${{ env.K8S_REPO_NAME }}
+      - name: Commit changes
+        env:
+          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ${{ env.K8S_DEPLOYMENT_FILE }}
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
           git commit -m "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
-          git push --set-upstream origin bump-image-${GITHUB_SHA}
+          git push --set-upstream origin "$BRANCH"
 
-      - name: Open PR to k8s repo
+      - name: Open PR
         env:
-          GH_TOKEN: ${{ secrets.K8S_REPO_PAT }}
-        working-directory: ${{ env.K8S_REPO_NAME }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ env.PR_BRANCH_PREFIX }}${{ github.sha }}
         run: |
-          TITLE="chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}"
-          BODY="Automated PR from app build."
-          DATA=$(jq -nc --arg title "$TITLE" --arg head "bump-image-${GITHUB_SHA}" --arg base "${{ env.K8S_REPO_BRANCH }}" --arg body "$BODY" '{title:$title, head:$head, base:$base, body:$body}')
-          curl -s -H "Authorization: token $GH_TOKEN" \
-               -H "Accept: application/vnd.github+json" \
-               https://api.github.com/repos/${{ env.K8S_REPO_OWNER }}/${{ env.K8S_REPO_NAME }}/pulls \
-               -d "$DATA"
+          gh pr create \
+            --title "chore(k8s): bump image to ${{ steps.vars.outputs.IMAGE_URI }}" \
+            --body "Automated PR from app build." \
+            --base "main" \
+            --head "$BRANCH" || echo "PR already exists or no changes."
