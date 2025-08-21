@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documenso
+  namespace: documenso
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: documenso
+  template:
+    metadata:
+      labels:
+        app: documenso
+    spec:
+      containers:
+        - name: web
+          image: <ECR_REPO_URL>:<TAG>   # ECR 이미지로 교체
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: documenso-config
+            - secretRef:
+                name: documenso-secrets
