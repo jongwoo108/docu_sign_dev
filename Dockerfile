@@ -1,48 +1,29 @@
-# ---- Builder ----
-FROM node:22-alpine AS builder
+FROM node:22-alpine
 
+# 도구
 RUN apk add --no-cache bash libc6-compat openssl
 WORKDIR /app
 
+# 의존성 (dev 포함 설치: 빌드를 위해 필요)
 ENV HUSKY=0
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN npm ci --include=dev || npm install
 
-# Prisma 스키마 복사
+# 소스 + Prisma
 COPY packages/prisma ./prisma
-
-# 전체 소스 복사
 COPY . .
 
 # Prisma Client 생성
 RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
-# Remix 앱 빌드
+# Remix 빌드 (apps/remix/build 생성되어야 정상)
 RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
 
-# ---- Runtime ----
-FROM node:22-alpine AS runner
-
-WORKDIR /app
-
-# 런타임에 필요한 최소 툴만
-RUN apk add --no-cache bash openssl
-
+# (원하면) 슬림화 — 처음엔 생략 권장. 문제 없으면 나중에 추가해도 됨
+# RUN npm prune --omit=dev
 ENV NODE_ENV=production
-ENV HUSKY=0
 
-# package.json과 lock 파일 복사
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
-
-# production deps만 설치
-RUN npm ci --omit=dev || npm install --omit=dev
-
-# 빌드 산출물 복사
-COPY --from=builder /app/apps/remix ./apps/remix
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/node_modules ./node_modules
-
+# 실행: build 결과를 직접 실행 (dotenv/x-env 불필요)
 WORKDIR /app/apps/remix
 EXPOSE 3000
-
-CMD ["npm","run","start"]
+CMD ["node","build/server/index.js"]
