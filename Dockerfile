@@ -8,6 +8,8 @@ WORKDIR /app
 ENV HUSKY=0
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN npm ci --include=dev || npm install
+# cross-env 글로벌 설치 (npm start 스크립트에서 필요)
+RUN npm install -g cross-env
 
 # 소스 + Prisma
 COPY packages/prisma ./prisma
@@ -16,22 +18,16 @@ COPY . .
 # Prisma Client 생성
 RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
-# Remix 앱 전용 빌드 단계별 실행
+# 간단한 빌드 과정: turbo만 실행
+RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
+
+# 기본 작업 디렉토리 설정
 WORKDIR /app/apps/remix
-RUN npm run build:app
-RUN npm run build:server
-
-# main.js 파일을 build/server/로 복사
-RUN cp server/main.js build/server/main.js
-
-# 기본 translations 디렉토리 생성 (빈 디렉토리라도)
-RUN mkdir -p build/server/hono/packages/lib/translations
 
 # (원하면) 슬림화 — 처음엔 생략 권장. 문제 없으면 나중에 추가해도 됨
 # RUN npm prune --omit=dev
 ENV NODE_ENV=production
 
-# 실행: build 결과를 직접 실행 (dotenv/x-env 불필요)
-WORKDIR /app
+# 실행: npm start 사용 (cross-env가 설치되어 있으므로 정상 작동)
 EXPOSE 3000
-CMD ["node","apps/remix/build/server/main.js"]
+CMD ["npm", "run", "start"]
