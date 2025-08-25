@@ -16,11 +16,16 @@ COPY . .
 # Prisma Client 생성
 RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
-# Remix 빌드 (apps/remix/build 생성되어야 정상)
-RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
-# Remix 앱 전용 빌드 스크립트 실행 (main.js 파일 복사 포함)
+# Remix 앱 전용 빌드 단계별 실행
 WORKDIR /app/apps/remix
-RUN npm run build
+RUN npm run build:app
+RUN npm run build:server
+
+# main.js 파일을 build/server/로 복사
+RUN cp server/main.js build/server/main.js
+
+# 기본 translations 디렉토리 생성 (빈 디렉토리라도)
+RUN mkdir -p build/server/hono/packages/lib/translations
 
 # (원하면) 슬림화 — 처음엔 생략 권장. 문제 없으면 나중에 추가해도 됨
 # RUN npm prune --omit=dev
