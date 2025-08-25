@@ -24,11 +24,11 @@ spec:
       containers:
         - name: web
           # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:63f0a6a32480ed43e3943a911e83afa44748555b
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:973040dd9c41f17a98c1d62c80a80f72b95241c1
           imagePullPolicy: IfNotPresent
-          workingDir: /app/apps/remix
+          workingDir: /app
           command: ["node"]
-          args: ["build/server/main.js"]
+          args: ["apps/remix/build/server/main.js"]
           # (이미지 엔트리포인트가 정상이면 아래 command/args는 생략 가능)
           # command: ["/bin/sh","-lc"]
           # args: ["npm run start --workspace=@documenso/remix"]
