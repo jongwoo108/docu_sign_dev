@@ -27,7 +27,7 @@ spec:
       containers:
         - name: web
           # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:cross-env-fixed
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:ac21f1eaf1636bd4661bf9bf26114d8c5fd81f3c
           imagePullPolicy: IfNotPresent
           # 기존 작동 중인 Pod와 동일한 설정 사용 (command/args 제거하고 기본 엔트리포인트 사용)
           # workingDir: /app/apps/remix
