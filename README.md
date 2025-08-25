@@ -7,7 +7,7 @@
     <a href="https://documenso.com"><strong>Learn more »</strong></a>
     <br />
     <br />
-    <a href="https://documen.so/discord">Discord</a>
+    <a href="https://documen.so/discord">Discord!</a>
     ·
     <a href="https://documenso.com">Website</a>
     ·
