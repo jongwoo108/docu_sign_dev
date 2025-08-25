@@ -26,4 +26,4 @@ ENV NODE_ENV=production
 # 실행: build 결과를 직접 실행 (dotenv/x-env 불필요)
 WORKDIR /app/apps/remix
 EXPOSE 3000
-CMD ["node","build/server/index.js"]
+CMD ["node","build/server/main.js"]

@@ -35,22 +35,29 @@ spec:
           ports:
             - name: http
               containerPort: 3000
-          # 라이브에서 보였던 헬스체크와 유사하게 설정
+          # 헬스체크 설정 개선
           readinessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 20
+              httpHeaders:
+                - name: Host
+                  value: localhost
+            initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 1
+            timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 1
           livenessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 60
-            periodSeconds: 20
-            timeoutSeconds: 1
+              httpHeaders:
+                - name: Host
+                  value: localhost
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
             failureThreshold: 3
           resources:
             requests:
@@ -61,6 +68,10 @@ spec:
               memory: "1Gi"
           # ALB DNS 반영 (현재 라이브에서 쓰던 값)
           env:
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              value: "production"
             - name: NEXTAUTH_URL
               value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
             - name: NEXT_PUBLIC_WEBAPP_URL
@@ -69,6 +80,30 @@ spec:
               value: "http://localhost:3000"
             - name: APP_URL
               value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+            # 필수 암호화 키들 (시크릿에서 가져와야 함)
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-env
+                  key: NEXTAUTH_SECRET
+            - name: NEXT_PRIVATE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-env
+                  key: NEXT_PRIVATE_ENCRYPTION_KEY
+            - name: NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: documenso-env
+                  key: NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY
+            # 업로드 설정
+            - name: NEXT_PUBLIC_UPLOAD_TRANSPORT
+              value: "database"
+            # 한국어 기본 설정
+            - name: NEXT_PUBLIC_DEFAULT_LANGUAGE
+              value: "ko"
+            - name: NEXT_PUBLIC_DISABLE_SIGNUP
+              value: "false"
             # DB (기존 시크릿 documenso-db 그대로 사용)
             - name: NEXT_PRIVATE_DATABASE_URL
               valueFrom:
