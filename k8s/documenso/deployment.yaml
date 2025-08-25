@@ -80,22 +80,6 @@ spec:
               value: "http://localhost:3000"
             - name: APP_URL
               value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
-            # 필수 암호화 키들 (시크릿에서 가져와야 함)
-            - name: NEXTAUTH_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: documenso-env
-                  key: NEXTAUTH_SECRET
-            - name: NEXT_PRIVATE_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: documenso-env
-                  key: NEXT_PRIVATE_ENCRYPTION_KEY
-            - name: NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: documenso-env
-                  key: NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY
             # 업로드 설정
             - name: NEXT_PUBLIC_UPLOAD_TRANSPORT
               value: "database"
