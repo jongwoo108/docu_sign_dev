@@ -28,7 +28,7 @@ spec:
           imagePullPolicy: IfNotPresent
           workingDir: /app
           command: ["node"]
-          args: ["apps/remix/build/server/main.js"]
+          args: ["apps/remix/server/main.js"]
           # (이미지 엔트리포인트가 정상이면 아래 command/args는 생략 가능)
           # command: ["/bin/sh","-lc"]
           # args: ["npm run start --workspace=@documenso/remix"]
