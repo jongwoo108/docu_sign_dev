@@ -18,6 +18,9 @@ RUN npx prisma generate --schema=/app/prisma/schema.prisma
 
 # Remix 빌드 (apps/remix/build 생성되어야 정상)
 RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
+# Remix 앱 전용 빌드 스크립트 실행 (main.js 파일 복사 포함)
+WORKDIR /app/apps/remix
+RUN npm run build
 
 # (원하면) 슬림화 — 처음엔 생략 권장. 문제 없으면 나중에 추가해도 됨
 # RUN npm prune --omit=dev
