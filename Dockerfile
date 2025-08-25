@@ -24,6 +24,6 @@ RUN npx turbo run build --filter=@documenso/remix^... --no-daemon
 ENV NODE_ENV=production
 
 # 실행: build 결과를 직접 실행 (dotenv/x-env 불필요)
-WORKDIR /app/apps/remix
+WORKDIR /app
 EXPOSE 3000
-CMD ["node","build/server/main.js"]
+CMD ["node","apps/remix/build/server/main.js"]
