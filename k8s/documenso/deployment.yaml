@@ -24,7 +24,7 @@ spec:
       containers:
         - name: web
           # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:973040dd9c41f17a98c1d62c80a80f72b95241c1
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:37d26def20309399d4c13c1646c4f3e22e051255
           imagePullPolicy: IfNotPresent
           workingDir: /app/apps/remix
           command: ["npm"]
