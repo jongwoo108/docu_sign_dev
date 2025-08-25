@@ -14,8 +14,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: documenso
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    # 시연영상 제작을 위해 자동 동기화 비활성화
+    # automated:
+    #   prune: true
+    #   selfHeal: true
     syncOptions:
       - CreateNamespace=true
