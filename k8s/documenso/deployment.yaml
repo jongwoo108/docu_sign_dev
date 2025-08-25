@@ -8,12 +8,12 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 10
-     # 시연영상 제작을 위해 현재 정상 작동하는 Pod들만 유지
-   strategy:
-     type: Recreate
-   selector:
-     matchLabels:
-       app: documenso
+  # 시연영상 제작을 위해 현재 정상 작동하는 Pod들만 유지
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: documenso
   template:
     metadata:
       labels:
@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
         - name: web
-                     # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-           image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:latest
+          # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:latest
           imagePullPolicy: IfNotPresent
           # 기존 작동 중인 Pod와 동일한 설정 사용 (command/args 제거하고 기본 엔트리포인트 사용)
           # workingDir: /app/apps/remix
