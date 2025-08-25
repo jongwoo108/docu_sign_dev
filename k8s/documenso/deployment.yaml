@@ -24,7 +24,7 @@ spec:
       containers:
         - name: web
           # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:973040dd9c41f17a98c1d62c80a80f72b95241c1
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:74c7b72a027f86b84a352df3661f3ddec5e26f93
           imagePullPolicy: IfNotPresent
           workingDir: /app
           command: ["node"]
