@@ -8,17 +8,12 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 10
-  # 시연영상 제작을 위해 현재 정상 작동하는 Pod들만 유지
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: documenso
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+     # 시연영상 제작을 위해 현재 정상 작동하는 Pod들만 유지
+   strategy:
+     type: Recreate
+   selector:
+     matchLabels:
+       app: documenso
   template:
     metadata:
       labels:
