@@ -7,7 +7,8 @@ metadata:
     app: documenso
 spec:
   replicas: 2
-  revisionHistoryLimit: 10
+  # 불필요한 RS 누적 방지(원래 10이었다면 유지해도 무방)
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: documenso
@@ -23,16 +24,21 @@ spec:
     spec:
       containers:
         - name: web
-          # ECR에 있는 단일 이미지 사용 (필요 시 원하는 리포/태그로 변경)
-          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso:63f0a6a32480ed43e3943a911e83afa44748555b
+          # ✅ latest 제거 → 불변 다이제스트로 고정
+          image: 348823728620.dkr.ecr.ap-northeast-2.amazonaws.com/documenso@sha256:cd7c7150491d6da8e54c122446bec567ebc48cf50d0a573813237eaa36a92904
+          # 다이제스트는 IfNotPresent로 충분 (latest가 아니니 Always 불필요)
           imagePullPolicy: IfNotPresent
-          # (이미지 엔트리포인트가 정상이면 아래 command/args는 생략 가능)
-          # command: ["/bin/sh","-lc"]
-          # args: ["npm run start --workspace=@documenso/remix"]
+
+          # remix만 실행
+          workingDir: /app/apps/remix
+          command: ["npm"]
+          args: ["run", "start"]
+
           ports:
             - name: http
               containerPort: 3000
-          # 라이브에서 보였던 헬스체크와 유사하게 설정
+
+          # 헬스 체크
           readinessProbe:
             httpGet:
               path: /
@@ -49,6 +55,7 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 1
             failureThreshold: 3
+
           resources:
             requests:
               cpu: "250m"
@@ -56,17 +63,19 @@ spec:
             limits:
               cpu: "1"
               memory: "1Gi"
-          # ALB DNS 반영 (현재 라이브에서 쓰던 값)
+
+          # ALB DNS (현재 값 유지)
           env:
             - name: NEXTAUTH_URL
-              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+              value: "http://k8s-documens-documens-a6bf42ff50-1816123568.ap-northeast-2.elb.amazonaws.com"
             - name: NEXT_PUBLIC_WEBAPP_URL
-              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
+              value: "http://k8s-documens-documens-a6bf42ff50-1816123568.ap-northeast-2.elb.amazonaws.com"
             - name: NEXT_PRIVATE_INTERNAL_WEBAPP_URL
               value: "http://localhost:3000"
             - name: APP_URL
-              value: "http://k8s-documens-documens-70aa8d677b-669014281.ap-northeast-2.elb.amazonaws.com"
-            # DB (기존 시크릿 documenso-db 그대로 사용)
+              value: "http://k8s-documens-documens-a6bf42ff50-1816123568.ap-northeast-2.elb.amazonaws.com"
+
+            # DB 시크릿
             - name: NEXT_PRIVATE_DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -82,7 +91,8 @@ spec:
                 secretKeyRef:
                   name: documenso-db
                   key: DATABASE_URL
-            # SMTP/EMAIL (기존 시크릿 documenso-smtp 그대로 사용)
+
+            # SMTP/EMAIL 시크릿
             - name: EMAIL_FROM
               valueFrom:
                 secretKeyRef:
@@ -133,7 +143,8 @@ spec:
                 secretKeyRef:
                   name: documenso-smtp
                   key: SMTP_USER
-          # 기존에 envFrom으로 통짜 주입하던 시크릿 유지 (라이브와 동일: documenso-env)
+
+          # 통짜 환경 시크릿 유지
           envFrom:
             - secretRef:
                 name: documenso-env
