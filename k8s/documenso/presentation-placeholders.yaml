@@ -1,0 +1,145 @@
+# 초경량 placeholder 파드 (pause 이미지) — 실제 트래픽 없음
+# 필요 수량만 남기고 원치 않는 블록은 삭제해도 됩니다.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-ingress
+  namespace: documenso
+  labels: { app: ng-ingress, tier: ingress }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-ingress } }
+  template:
+    metadata: { labels: { app: ng-ingress } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-auth
+  namespace: documenso
+  labels: { app: ng-auth, tier: auth }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-auth } }
+  template:
+    metadata: { labels: { app: ng-auth } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-frontend
+  namespace: documenso
+  labels: { app: ng-frontend, tier: frontend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-frontend } }
+  template:
+    metadata: { labels: { app: ng-frontend } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-backend
+  namespace: documenso
+  labels: { app: ng-backend, tier: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-backend } }
+  template:
+    metadata: { labels: { app: ng-backend } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-pdf
+  namespace: documenso
+  labels: { app: ng-pdf, tier: worker }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-pdf } }
+  template:
+    metadata: { labels: { app: ng-pdf } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-mailer
+  namespace: documenso
+  labels: { app: ng-mailer, tier: worker }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-mailer } }
+  template:
+    metadata: { labels: { app: ng-mailer } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-webhook
+  namespace: documenso
+  labels: { app: ng-webhook, tier: worker }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-webhook } }
+  template:
+    metadata: { labels: { app: ng-webhook } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ng-ai
+  namespace: documenso
+  labels: { app: ng-ai, tier: ai }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ng-ai } }
+  template:
+    metadata: { labels: { app: ng-ai } }
+    spec:
+      containers:
+        - name: placeholder
+          image: registry.k8s.io/pause:3.9
+          resources: { requests: { cpu: "5m", memory: "16Mi" }, limits: { cpu: "20m", memory: "32Mi" } }
