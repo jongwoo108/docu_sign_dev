@@ -26,7 +26,10 @@ jobs:
       EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
       CONTAINER_NAME: web
+      # kubeconfig 경로 (runner.temp 대신 workspace 사용)
       KUBECONFIG_PATH: ${{ github.workspace }}/kubeconfig
+      # kubectl이 기본으로 동일 kubeconfig를 보도록 환경변수도 지정
+      KUBECONFIG: ${{ github.workspace }}/kubeconfig
 
     steps:
       - uses: actions/checkout@v4
@@ -86,12 +89,24 @@ jobs:
           kubectl --kubeconfig "${KUBECONFIG_PATH}" version --client
           echo "KUBECONFIG_READY=true" >> "$GITHUB_ENV"
 
+      # === kubectl 사용 전: kubeconfig 경로/자격 재주입 ===
+      - name: Export KUBECONFIG
+        if: env.KUBECONFIG_READY == 'true'
+        run: echo "KUBECONFIG=${KUBECONFIG_PATH}" >> "$GITHUB_ENV"
+
+      - name: Reconfigure AWS credentials (for kubectl)
+        if: env.KUBECONFIG_READY == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: RBAC sanity check
         if: env.KUBECONFIG_READY == 'true'
         run: |
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i patch deployment
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i get pods
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" auth can-i list deployments
+          kubectl -n "${K8S_NAMESPACE}" auth can-i patch deployment
+          kubectl -n "${K8S_NAMESPACE}" auth can-i get pods
+          kubectl -n "${K8S_NAMESPACE}" auth can-i list deployments
         continue-on-error: true
 
       - name: Resolve container name (auto-detect)
@@ -103,22 +118,22 @@ jobs:
             CN="${{ secrets.CONTAINER_NAME }}"
           else
             # 디폴트: documenso 디플로이의 첫 번째 컨테이너명 or 'web'
-            CN="$(kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+            CN="$(kubectl -n "${K8S_NAMESPACE}" \
                   get deploy/documenso -o jsonpath='{.spec.template.spec.containers[0].name}' 2>/dev/null || echo 'web')"
           fi
           echo "USING_CONTAINER=${CN}" >> "$GITHUB_ENV"
           echo "Using container: ${CN}"
         continue-on-error: true
 
-      # ===== 핵심 변경 1: 커밋마다 롤아웃 강제 (Pod 템플릿 어노테이션에 SHA 주입) =====
+      # ===== 커밋마다 롤아웃 강제 (Pod 템플릿 어노테이션에 SHA 주입) =====
       - name: Force rollout by annotating pod template with commit SHA
         if: env.KUBECONFIG_READY == 'true'
         run: |
           set -euxo pipefail
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" patch deploy/documenso \
+          kubectl -n "${K8S_NAMESPACE}" patch deploy/documenso \
             -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"ci.commitSha\":\"${GITHUB_SHA}\"}}}}}"
 
-      # ===== 핵심 변경 2: 새 이미지로 교체(커밋 SHA 태그) =====
+      # ===== 새 이미지로 교체(커밋 SHA 태그) =====
       - name: Rolling update with new image tag
         if: env.KUBECONFIG_READY == 'true'
         run: |
@@ -126,30 +141,41 @@ jobs:
           echo "=== Rolling update ==="
           echo "Image: ${IMAGE}"
           echo "Container: ${USING_CONTAINER}"
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+          kubectl -n "${K8S_NAMESPACE}" \
             set image deploy/documenso "${USING_CONTAINER}"="${IMAGE}"
           # (선택) imagePullPolicy=Always 보정 - 없으면 추가, 있으면 무시
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" patch deploy/documenso --type='json' -p='[
+          kubectl -n "${K8S_NAMESPACE}" patch deploy/documenso --type='json' -p='[
             {"op":"add","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Always"}
           ]' || true
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+          kubectl -n "${K8S_NAMESPACE}" \
             annotate deploy/documenso kubernetes.io/change-cause="GitHub ${GITHUB_SHA}" --overwrite
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
+          kubectl -n "${K8S_NAMESPACE}" \
             rollout status deploy/documenso --timeout=180s
 
       - name: Verify running image
         if: env.KUBECONFIG_READY == 'true'
         run: |
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" get deploy documenso \
+          kubectl -n "${K8S_NAMESPACE}" get deploy documenso \
             -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{" => "}{.image}{"\n"}{end}'
           echo "---- Pod imageIDs ----"
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" get pods -l app=documenso \
+          kubectl -n "${K8S_NAMESPACE}" get pods -l app=documenso \
             -o jsonpath='{range .items[*]}{.metadata.name}{" -> "}{.status.containerStatuses[0].imageID}{"\n"}{end}'
+
+      # === 실패 시에도 자격/환경 보장 후 롤백 ===
+      - name: Reconfigure AWS credentials (rollback)
+        if: failure() && env.KUBECONFIG_READY == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Export KUBECONFIG (rollback)
+        if: failure() && env.KUBECONFIG_READY == 'true'
+        run: echo "KUBECONFIG=${KUBECONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: On failure → Rollback
         if: failure() && env.KUBECONFIG_READY == 'true'
         run: |
           echo "=== Rolling back deployment ==="
-          kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${K8S_NAMESPACE}" \
-            rollout undo deploy/documenso
+          kubectl -n "${K8S_NAMESPACE}" rollout undo deploy/documenso
         continue-on-error: true
