@@ -26,7 +26,7 @@ jobs:
       EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
       CONTAINER_NAME: web
-      KUBECONFIG_PATH: ${{ runner.temp }}/kubeconfig
+      KUBECONFIG_PATH: ${{ github.workspace }}/kubeconfig
 
     steps:
       - uses: actions/checkout@v4
