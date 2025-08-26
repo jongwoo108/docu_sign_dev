@@ -29,4 +29,4 @@ ENV NODE_ENV=production
 # 실행
 WORKDIR /app/apps/remix
 EXPOSE 3000
-CMD ["npm","run","start"]
+CMD ["npm","run","start"] 
