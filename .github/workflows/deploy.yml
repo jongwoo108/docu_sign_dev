@@ -28,7 +28,7 @@ jobs:
       CONTAINER_NAME: web
       # kubeconfig 경로 (runner.temp 대신 workspace 사용)
       KUBECONFIG_PATH: ${{ github.workspace }}/kubeconfig
-      # kubectl이 기본으로 동일 kubeconfig를 보도록 환경변수도 지정
+      # kubectl 기본 kubeconfig
       KUBECONFIG: ${{ github.workspace }}/kubeconfig
 
     steps:
@@ -40,18 +40,14 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Debug - Check AWS identity and permissions
+      - name: Debug - Check AWS identity and EKS cluster
         run: |
           echo "=== AWS Identity ==="
           aws sts get-caller-identity
           echo ""
           echo "=== EKS Cluster Info ==="
-          aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" --query 'cluster.{name:name,status:status,version:version,arn:arn}' || true
-          echo ""
-          echo "=== ENV ==="
-          echo "AWS_REGION=${AWS_REGION}"
-          echo "EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME}"
-          echo "K8S_NAMESPACE=${K8S_NAMESPACE}"
+          aws eks describe-cluster --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" \
+            --query 'cluster.{name:name,status:status,version:version,arn:arn}'
 
       - name: Login to Amazon ECR
         run: |
@@ -89,7 +85,7 @@ jobs:
           kubectl --kubeconfig "${KUBECONFIG_PATH}" version --client
           echo "KUBECONFIG_READY=true" >> "$GITHUB_ENV"
 
-      # === kubectl 사용 전: kubeconfig 경로/자격 재주입 ===
+      # === kubeconfig 직후: 환경 내보내기 + 자격 재주입 + 토큰/접속 검증 ===
       - name: Export KUBECONFIG
         if: env.KUBECONFIG_READY == 'true'
         run: echo "KUBECONFIG=${KUBECONFIG_PATH}" >> "$GITHUB_ENV"
@@ -101,7 +97,17 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: RBAC sanity check
+      - name: Sanity - can get EKS token & talk to API
+        if: env.KUBECONFIG_READY == 'true'
+        run: |
+          echo "=== aws eks get-token (short) ==="
+          aws eks get-token --cluster-name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}" | head -c 80 ; echo
+          echo "=== kubectl current-context ==="
+          kubectl config current-context
+          echo "=== kubectl get ns (top 5) ==="
+          kubectl get ns --request-timeout=20s | head -n 5
+
+      - name: RBAC sanity check (non-blocking)
         if: env.KUBECONFIG_READY == 'true'
         run: |
           kubectl -n "${K8S_NAMESPACE}" auth can-i patch deployment
@@ -150,7 +156,7 @@ jobs:
           kubectl -n "${K8S_NAMESPACE}" \
             annotate deploy/documenso kubernetes.io/change-cause="GitHub ${GITHUB_SHA}" --overwrite
           kubectl -n "${K8S_NAMESPACE}" \
-            rollout status deploy/documenso --timeout=180s
+            rollout status deploy/documenso --timeout=300s
 
       - name: Verify running image
         if: env.KUBECONFIG_READY == 'true'
@@ -173,9 +179,15 @@ jobs:
         if: failure() && env.KUBECONFIG_READY == 'true'
         run: echo "KUBECONFIG=${KUBECONFIG_PATH}" >> "$GITHUB_ENV"
 
+      - name: Test kubectl before rollback (non-blocking)
+        if: failure() && env.KUBECONFIG_READY == 'true'
+        run: |
+          kubectl get ns --request-timeout=20s | head -n 5 || true
+        continue-on-error: true
+
       - name: On failure → Rollback
         if: failure() && env.KUBECONFIG_READY == 'true'
         run: |
           echo "=== Rolling back deployment ==="
-          kubectl -n "${K8S_NAMESPACE}" rollout undo deploy/documenso
+          kubectl -n "${K8S_NAMESPACE}" --request-timeout=30s rollout undo deploy/documenso || true
         continue-on-error: true
