@@ -6,7 +6,7 @@ metadata:
   labels:
     app: documenso
 spec:
-  replicas: 4
+  replicas: 2
   # 불필요한 RS 누적 방지(원래 10이었다면 유지해도 무방)
   revisionHistoryLimit: 2
   selector:
@@ -15,7 +15,7 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 50%
+      maxSurge: 25%
       maxUnavailable: 25%
   template:
     metadata:
